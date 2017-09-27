@@ -4,7 +4,9 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math, logging
-import stepper, homing
+import stepper, homing, calibration
+import numpy as np
+from lmfit import minimize, Parameters
 
 StepList = (0, 1, 2)
 
@@ -12,16 +14,19 @@ StepList = (0, 1, 2)
 SLOW_RATIO = 3.
 
 class DeltaKinematics:
-    def __init__(self, toolhead, printer, config):
+    def __init__(self, toolhead, printer, config):      
         self.steppers = [stepper.PrinterHomingStepper(
             printer, config.getsection('stepper_' + n), n)
                          for n in ['a', 'b', 'c']]
         self.need_motor_enable = self.need_home = True
-        radius = config.getfloat('delta_radius', above=0.)
-        arm_length = config.getfloat('delta_arm_length', above=radius)
+        self.delta_probe_radius = config.getfloat('delta_probe_radius', 0.0)
+        self.endstop_corrections = [0., 0., 0.]
+        self.angle_corrections = [0., 0., 0.]
+        self.radius = config.getfloat('delta_radius', above=0.)
+        arm_length = config.getfloat('delta_arm_length', above=self.radius)
         self.arm_length2 = arm_length**2
         self.limit_xy2 = -1.
-        tower_height_at_zeros = math.sqrt(self.arm_length2 - radius**2)
+        tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius**2)
         self.max_z = min([s.position_endstop for s in self.steppers])
         self.limit_z = self.max_z - (arm_length - tower_height_at_zeros)
         logging.info(
@@ -36,12 +41,10 @@ class DeltaKinematics:
         for s in self.steppers:
             s.set_max_jerk(max_xy_halt_velocity, self.max_accel)
         # Determine tower locations in cartesian space
-        angles = [config.getsection('stepper_a').getfloat('angle', 210.),
-                  config.getsection('stepper_b').getfloat('angle', 330.),
-                  config.getsection('stepper_c').getfloat('angle', 90.)]
-        self.towers = [(math.cos(math.radians(angle)) * radius,
-                        math.sin(math.radians(angle)) * radius)
-                       for angle in angles]
+        self.angles = [config.getsection('stepper_a').getfloat('angle', 210.),
+                       config.getsection('stepper_b').getfloat('angle', 330.),
+                       config.getsection('stepper_c').getfloat('angle', 90.)]
+        self.towers = self.calculate_towers()
         # Find the point where an XY move could result in excessive
         # tower movement
         half_min_step_dist = min([s.step_dist for s in self.steppers]) * .5
@@ -49,15 +52,19 @@ class DeltaKinematics:
             return (ratio * math.sqrt(self.arm_length2 / (ratio**2 + 1.)
                                       - half_min_step_dist**2)
                     + half_min_step_dist)
-        self.slow_xy2 = (ratio_to_dist(SLOW_RATIO) - radius)**2
-        self.very_slow_xy2 = (ratio_to_dist(2. * SLOW_RATIO) - radius)**2
-        self.max_xy2 = min(radius, arm_length - radius,
-                           ratio_to_dist(4. * SLOW_RATIO) - radius)**2
+        self.slow_xy2 = (ratio_to_dist(SLOW_RATIO) - self.radius)**2
+        self.very_slow_xy2 = (ratio_to_dist(2. * SLOW_RATIO) - self.radius)**2
+        self.max_xy2 = min(self.radius, arm_length - self.radius,
+                           ratio_to_dist(4. * SLOW_RATIO) - self.radius)**2
         logging.info(
             "Delta max build radius %.2fmm (moves slowed past %.2fmm and %.2fmm)"
             % (math.sqrt(self.max_xy2), math.sqrt(self.slow_xy2),
                math.sqrt(self.very_slow_xy2)))
         self.set_position([0., 0., 0.])
+    def calculate_towers(self):
+        return [(math.cos(math.radians(angle + correction)) * self.radius,
+                  math.sin(math.radians(angle + correction)) * self.radius)
+                 for angle, correction in zip(self.angles, self.angle_corrections)]
     def _cartesian_to_actuator(self, coord):
         return [math.sqrt(self.arm_length2
                           - (self.towers[i][0] - coord[0])**2
@@ -65,9 +72,9 @@ class DeltaKinematics:
                 for i in StepList]
     def _actuator_to_cartesian(self, pos):
         # Based on code from Smoothieware
-        tower1 = list(self.towers[0]) + [pos[0]]
-        tower2 = list(self.towers[1]) + [pos[1]]
-        tower3 = list(self.towers[2]) + [pos[2]]
+        tower1 = list(self.towers[0]) + [pos[0] + self.endstop_corrections[0]]
+        tower2 = list(self.towers[1]) + [pos[1] + self.endstop_corrections[1]]
+        tower3 = list(self.towers[2]) + [pos[2] + self.endstop_corrections[2]]
 
         s12 = matrix_sub(tower1, tower2)
         s23 = matrix_sub(tower2, tower3)
@@ -226,7 +233,110 @@ class DeltaKinematics:
                 mcu_stepper.step_delta(
                     move_time, decel_d, cruise_v, -accel,
                     vt_startz, vt_startxy_d, vt_arm_d, movez_r)
+                    
+    def suggest_probe_points(self, calibration_point_count):
+        # Always probe the center
+        calibration_points = [[0, 0]]
+        # Generate a list of probe points [x,y] in a circle defined by delta_probe_radius
+        for i in range(calibration_point_count):
+            calibration_points.append([ math.sin(2*math.pi/calibration_point_count*i) * self.delta_probe_radius, 
+                                        math.cos(2*math.pi/calibration_point_count*i) * self.delta_probe_radius])               
+        return calibration_points
+        
+    def calibrate(self, probe_points):
+        # convert 
+        actuator_pos = [self._cartesian_to_actuator(p) for p in probe_points]
 
+        def residual(params, x, data, actuator_to_cartesian, eps_data):
+            # Tower angle corrections
+            angles = [params['angle_a'], params['angle_b'], params['angle_c']]
+            # Endstops corrections
+            endstops = [params['endstop_a'], params['endstop_b'], params['endstop_c']]           
+            # Delta radius
+            delta_radius = params['delta_radius']
+            # Arm length
+            arm_length2 = params['arm_length2']
+
+            # The model returns the expected value for 
+            model = [actuator_to_cartesian(xx, arm_length2, delta_radius, angles, endstops)[2] for xx in x]
+            
+            return (np.array(data) - np.array(model))/eps_data
+        
+        params = Parameters()
+        params.add('angle_a', value=self.angle_corrections[0], min=-3.0, max=3.0)
+        params.add('angle_b', value=self.angle_corrections[1], min=-3.0, max=3.0)
+        params.add('angle_c', value=self.angle_corrections[2], min=-3.0, max=3.0, vary=False)
+        params.add('endstop_a', value=self.endstop_corrections[0])
+        params.add('endstop_b', value=self.endstop_corrections[1])
+        params.add('endstop_c', value=self.endstop_corrections[2])
+        params.add('delta_radius', value=self.radius)
+        params.add('arm_length2', value=self.arm_length2, vary=False)
+
+        x = np.array(actuator_pos) - probe_points[0][2]
+        data = [0.] * len(probe_points) # The expected results (zero for all points)
+        eps_data = 1.0   
+        
+        logging.info(str(x), str(data))
+
+        out = minimize(residual, params, args=(x, data, actuator_to_cartesian, eps_data))
+
+        # Update the towers    
+        self.angle_corrections = [out.params['angle_a'].value, out.params['angle_b'].value, out.params['angle_c'].value]
+        self.towers = self.calculate_towers()
+        
+        # Update the endstops
+        self.endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]  
+        
+        # Update delta radius
+        self.radius = out.params['delta_radius'].value
+        
+        logging.info(
+            "=============================\n\n Angles [%.2f, %.2f, %.2f] \n Endstops [%.2f, %.2f, %.2f] \n Delta radius [%.2f]"
+            % (self.angle_corrections[0],self.angle_corrections[1],self.angle_corrections[2], 
+               self.endstop_corrections[0],self.endstop_corrections[1],self.endstop_corrections[2],
+               self.radius)
+            )
+
+######################################################################
+# Calibration helper functions
+######################################################################
+
+def actuator_to_cartesian(pos, arm_length2, radius, angle_corrections, endstop_corrections):
+    angles = [210 + angle_corrections[0], 330 + angle_corrections[1], 90 + angle_corrections[2]]
+    towers = [(math.cos(math.radians(angle)) * radius,
+               math.sin(math.radians(angle)) * radius)
+              for angle in angles]
+
+    # Based on code from Smoothieware
+    tower1 = list(towers[0]) + [pos[0] + endstop_corrections[0]]
+    tower2 = list(towers[1]) + [pos[1] + endstop_corrections[1]]
+    tower3 = list(towers[2]) + [pos[2] + endstop_corrections[2]]
+
+    s12 = matrix_sub(tower1, tower2)
+    s23 = matrix_sub(tower2, tower3)
+    s13 = matrix_sub(tower1, tower3)
+
+    normal = matrix_cross(s12, s23)
+
+    magsq_s12 = matrix_magsq(s12)
+    magsq_s23 = matrix_magsq(s23)
+    magsq_s13 = matrix_magsq(s13)
+
+    inv_nmag_sq = 1.0 / matrix_magsq(normal)
+    q = 0.5 * inv_nmag_sq
+
+    a = q * magsq_s23 * matrix_dot(s12, s13)
+    b = -q * magsq_s13 * matrix_dot(s12, s23)  # negate because we use s12 instead of s21
+    c = q * magsq_s12 * matrix_dot(s13, s23)
+
+    circumcenter = [tower1[0] * a + tower2[0] * b + tower3[0] * c,
+                    tower1[1] * a + tower2[1] * b + tower3[1] * c,
+                    tower1[2] * a + tower2[2] * b + tower3[2] * c]
+
+    r_sq = 0.5 * q * magsq_s12 * magsq_s23 * magsq_s13
+    dist = math.sqrt(inv_nmag_sq * (arm_length2 - r_sq))
+
+    return matrix_sub(circumcenter, matrix_mul(normal, dist))
 
 ######################################################################
 # Matrix helper functions for 3x1 matrices

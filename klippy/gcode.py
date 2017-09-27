@@ -294,7 +294,7 @@ class GCodeParser:
         'G1', 'G4', 'G20', 'G28', 'G90', 'G91', 'G92',
         'M82', 'M83', 'M18', 'M105', 'M104', 'M109', 'M112', 'M114', 'M115',
         'M140', 'M190', 'M106', 'M107', 'M206', 'M400',
-        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE',
+        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'PROBEDELTA',
         'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP']
     cmd_G1_aliases = ['G0']
     def cmd_G1(self, params):
@@ -474,7 +474,7 @@ class GCodeParser:
             s.set_pulse_width(print_time, self.get_float('WIDTH', params))
             return
         s.set_angle(print_time, self.get_float('ANGLE', params))
-    cmd_PROBE_help = "Probe Z-height at current XY position"
+    cmd_PROBE_help = "Probe Z-height at a given XY position"
     def cmd_PROBE(self, params):
         probe = self.printer.objects.get("probe")
         if probe is None:
@@ -484,6 +484,20 @@ class GCodeParser:
         except homing.EndstopError as e:
             self.respond_error(str(e))
         self.last_position = self.toolhead.get_position()
+    cmd_PROBEDELTA_help = "Probe Delta"
+    def cmd_PROBEDELTA(self, params):
+        probe = self.printer.objects.get("probe")
+        probe_points = self.toolhead.kin.suggest_probe_points(6)
+        if probe is None:
+            raise error("Probe not configured")
+        try:
+            results = probe.probe_points(probe_points)
+            self.toolhead.kin.calibrate(results)
+        except homing.EndstopError as e:
+            logging.info(str(e))
+            self.respond_error(str(e))  
+        # Home after we finished probing
+        self.cmd_G28(params)
     def prep_restart(self):
         if self.is_printer_ready:
             self.respond_info("Preparing to restart...")
