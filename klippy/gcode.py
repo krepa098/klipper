@@ -492,12 +492,17 @@ class GCodeParser:
             raise error("Probe not configured")
         try:
             results = probe.probe_points(probe_points)
-            self.toolhead.kin.calibrate(results)
+            corrections = self.toolhead.kin.calibrate(results)
+
+            # Inform the user about the pending corrections
+            self.respond("Corrections: %s" % str(corrections))
+
+            # Queue corrections to be applied on G28
+            self.toolhead.kin.queue_corrections(corrections)
+            self.cmd_G28(params)  # Home
         except homing.EndstopError as e:
             logging.info(str(e))
-            self.respond_error(str(e))  
-        # Home after we finished probing
-        self.cmd_G28(params)
+            self.respond_error(str(e))
     def prep_restart(self):
         if self.is_printer_ready:
             self.respond_info("Preparing to restart...")

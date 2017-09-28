@@ -35,22 +35,19 @@ class PrinterProbe:
             raise homing.EndstopError("Failed to probe: %s" % (str(e),))
         # Update with new position
         self.toolhead.reset_position() 
-        return self.toolhead.get_position()[2] 
+        return self.toolhead.get_position()[2] + self.offset[2]
          
     def probe_points(self, points):
         measurements = []
         for p in points:
-            pos = self.toolhead.get_position()
             # Move toolhead above probe position
-            pos[0] = p[0]
-            pos[1] = p[1]
-            pos[2] = 30.0 
-            self.toolhead.move(pos, self.speed * 5)
+            pos = [p[0], p[1], self.z_distance - self.offset[2], self.toolhead.get_position()[3]]
+            self.toolhead.move(pos, self.speed * 5.0)
             # Move down to probe
-            height = self.probe_height() + self.offset[2]
+            height = self.probe_height()
             measurements.append([p[0], p[1], height])
             # Move back up
-            self.toolhead.move(pos, self.speed * 5)
+            self.toolhead.move(pos, self.speed * 5.0)
 
         return measurements
 
