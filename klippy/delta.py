@@ -59,6 +59,11 @@ class DeltaKinematics:
     def calculate_params(self):
         logging.info("Updating delta kinematics")
 
+        # Apply endstop corrections to the steppers
+        for stepper, corr in zip(self.steppers, self.endstop_corrections):
+            stepper.position_endstop += corr
+            logging.info("Adj. stepper endstop %.2f" % (stepper.position_endstop))
+
         tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius ** 2)
 
         self.max_z = min([s.position_endstop + endstop_correction for s, endstop_correction in
@@ -83,10 +88,6 @@ class DeltaKinematics:
         self.very_slow_xy2 = (ratio_to_dist(2. * SLOW_RATIO) - self.radius) ** 2
         self.max_xy2 = min(self.radius, self.arm_length - self.radius,
                            ratio_to_dist(4. * SLOW_RATIO) - self.radius) ** 2
-
-        # Apply endstop corrections to the steppers
-        for stepper, corr in zip(self.steppers, self.endstop_corrections):
-            stepper.position_endstop += corr
 
     def _cartesian_to_actuator(self, coord):
         return [math.sqrt(self.arm_length2
@@ -137,6 +138,14 @@ class DeltaKinematics:
         self.limit_xy2 = -1.
 
     def home(self, homing_state):
+        # Check for pending delta corrections
+        if self.pending_corrections:
+            self.angle_corrections = self.pending_corrections['angle_corrections']
+            self.endstop_corrections = self.pending_corrections['endstop_corrections']
+            self.radius = self.pending_corrections['radius']
+            self.pending_corrections = None
+            self.calculate_params()
+
         # All axes are homed simultaneously
         homing_state.set_axes([0, 1, 2])
         s = self.steppers[0] # Assume homing speed same for all steppers
@@ -155,21 +164,12 @@ class DeltaKinematics:
         homing_state.home(list(coord), homepos, self.steppers
                           , homing_speed/2.0, second_home=True)
 
-        # Check for pending delta corrections
-        if self.pending_corrections:
-            self.angle_corrections = self.pending_corrections['angle_corrections']
-            self.endstop_corrections = self.pending_corrections['endstop_corrections']
-            self.radius = self.pending_corrections['delta_radius']
-            self.pending_corrections = None
-            self.calculate_params()
-
         # Set final homed position
         spos = self._cartesian_to_actuator(homepos)
         spos = [spos[i] + self.steppers[i].position_endstop - self.max_z
-                + self.steppers[i].get_homed_offset() + self.endstop_corrections[i]
+                + self.steppers[i].get_homed_offset()
                 for i in StepList]
         homing_state.set_homed_position(self._actuator_to_cartesian(spos))
-        #homing_state.retract(list(coord), homing_speed)
 
     def query_endstops(self, print_time):
         return homing.query_endstops(print_time, self.steppers)
@@ -286,9 +286,9 @@ class DeltaKinematics:
                                         math.cos(2*math.pi/calibration_point_count*i) * self.delta_probe_radius])               
         return calibration_points
         
-    def calibrate(self, probe_points):
+    def calibrate(self, probe_results):
         # convert 
-        actuator_pos = [self._cartesian_to_actuator(p) for p in probe_points]
+        actuator_pos = [self._cartesian_to_actuator([p[0], p[1], h]) for p, h in zip(probe_results.points, probe_results.heights)]
 
         def residual(params, x, data, actuator_to_cartesian, eps_data):
             angle_corrections = [params['angle_a'], params['angle_b'], params['angle_c']]
@@ -312,7 +312,7 @@ class DeltaKinematics:
         params.add('radius', value=self.radius)
 
         x = np.array(actuator_pos)
-        data = [0.] * len(probe_points)  # The expected result is zero in all points
+        data = [0.] * probe_results.count  # The expected result is zero in all points
         eps_data = 1.0
 
         # Perform the optimization using 6 parameters i.e. we need a least 6 test points
@@ -343,7 +343,7 @@ class DeltaKinematics:
 
         return {'angle_corrections': angle_corrections,
                 'endstop_corrections': endstop_corrections,
-                'delta_radius': radius,
+                'radius': radius,
                 'std': np.std(z_corr)}
 
     # Corrections are not applied until the next call to home

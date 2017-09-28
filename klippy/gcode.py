@@ -4,7 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import os, re, logging, collections
-import homing, extruder, chipmisc
+import homing, extruder, chipmisc, delta
 
 # Parse out incoming GCode and find and translate head movements
 class GCodeParser:
@@ -294,7 +294,7 @@ class GCodeParser:
         'G1', 'G4', 'G20', 'G28', 'G90', 'G91', 'G92',
         'M82', 'M83', 'M18', 'M105', 'M104', 'M109', 'M112', 'M114', 'M115',
         'M140', 'M190', 'M106', 'M107', 'M206', 'M400',
-        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'CALIBRATEDELTA',
+        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'CALIBRATEDELTA', 'CHECKDELTACALIBRATION',
         'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP']
     cmd_G1_aliases = ['G0']
     def cmd_G1(self, params):
@@ -486,6 +486,9 @@ class GCodeParser:
         self.last_position = self.toolhead.get_position()
     cmd_CALIBRATEDELTA_help = "Performs the calibration of a Delta printer"
     def cmd_CALIBRATEDELTA(self, params):
+        if not isinstance(self.toolhead.kin, delta.DeltaKinematics):
+            return self.respond_error("This command is only available on Delta printers")
+
         probe = self.printer.objects.get("probe")
         probe_points = self.toolhead.kin.suggest_probe_points(6)
         if probe is None:
@@ -499,7 +502,21 @@ class GCodeParser:
             # Home
             self.cmd_G28(params)
         except homing.EndstopError as e:
-            logging.info(str(e))
+            self.respond_error(str(e))
+    cmd_CHECKDELTACALIBRATION_help = "TODO"
+    def cmd_CHECKDELTACALIBRATION(self, params):
+        if not isinstance(self.toolhead.kin, delta.DeltaKinematics):
+            return self.respond_error("This command is only available on Delta printers")
+
+        probe = self.printer.objects.get("probe")
+        probe_points = self.toolhead.kin.suggest_probe_points(6)
+        if probe is None:
+            raise error("Probe not configured")
+        try:
+            results = probe.probe_points(probe_points)
+            self.respond("std: [%f.2]\nheights: [%s]" % (results.std, str(results.heights)))
+            self.cmd_G28(params)
+        except homing.EndstopError as e:
             self.respond_error(str(e))
     def prep_restart(self):
         if self.is_printer_ready:

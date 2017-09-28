@@ -3,7 +3,16 @@
 # Copyright (C) 2017  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import pins, homing, math
+import pins, homing
+from numpy import std
+
+
+class ProbeResults:
+    def __init__(self):
+        self.count = 0
+        self.points = []  # The probe points in cartesian coords
+        self.heights = []  # The heights for the given probe points
+        self.std = 0.  # The standard deviation of the results
 
 class PrinterProbe:
     def __init__(self, printer, config):
@@ -38,18 +47,21 @@ class PrinterProbe:
         return self.toolhead.get_position()[2] + self.offset[2]
          
     def probe_points(self, points):
-        measurements = []
+        results = ProbeResults()
+        results.points = points
+        results.count = len(points)
         for p in points:
             # Move toolhead above probe position
-            pos = [p[0], p[1], self.z_distance - self.offset[2], self.toolhead.get_position()[3]]
+            pos = [p[0], p[1], (self.z_distance * 0.5) - self.offset[2], self.toolhead.get_position()[3]]
             self.toolhead.move(pos, self.speed * 5.0)
             # Move down to probe
             height = self.probe_height()
-            measurements.append([p[0], p[1], height])
+            results.heights.append(height)
             # Move back up
             self.toolhead.move(pos, self.speed * 5.0)
 
-        return measurements
+        results.std = std(results.heights)
+        return results
 
 def add_printer_objects(printer, config):
     if config.has_section('probe'):
