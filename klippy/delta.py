@@ -318,6 +318,10 @@ class DeltaKinematics:
         # Perform the optimization using 6 parameters i.e. we need a least 6 test points
         out = minimize(residual, params, args=(x, data, actuator_to_cartesian, eps_data))
 
+        # The optimization may fail under certain circumstances
+        if not out.success:
+            return None
+
         # Extract results
         angle_corrections = [out.params['angle_a'].value, out.params['angle_b'].value, out.params['angle_c'].value]
         endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]
