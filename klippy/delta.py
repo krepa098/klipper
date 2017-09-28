@@ -19,9 +19,9 @@ class DeltaKinematics:
             printer, config.getsection('stepper_' + n), n)
                          for n in ['a', 'b', 'c']]
         self.need_motor_enable = self.need_home = True
-        self.delta_probe_radius = config.getfloat('delta_probe_radius', 0.0)
-        self.endstop_corrections = [0., 0., 0.]
-        self.angle_corrections = [0., 0., 0.]
+        self.delta_probe_radius = config.getfloat('delta_probe_radius', 0.)
+        self.endstop_corrections = [config.getfloat('delta_endstop_' + n, 0.) for n in ['a', 'b', 'c']]
+        self.angle_corrections = [config.getfloat('delta_angle_' + n, 0.) for n in ['a', 'b', 'c']]
         self.pending_corrections = None
         self.radius = config.getfloat('delta_radius', above=0.)
         self.arm_length = config.getfloat('delta_arm_length', above=self.radius)
@@ -310,7 +310,7 @@ class DeltaKinematics:
             # probe positions
             model = [actuator_to_cartesian(xx, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections)[2] for xx in x]
 
-            # The expected value for the z component is 0
+            # Return the error i.e. the new distance between the toolhead and the bed
             return (np.array(data) - np.array(model))/eps_data
         
         params = Parameters()
