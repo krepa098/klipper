@@ -277,18 +277,23 @@ class DeltaKinematics:
                     move_time, decel_d, cruise_v, -accel,
                     vt_startz, vt_startxy_d, vt_arm_d, movez_r)
                     
-    def suggest_probe_points(self, calibration_point_count):
+    def suggest_probe_points(self, calibration_point_count, probe_offset):
         """
-        Suggests a number of probe points. Used to perform calibration tasks.
+        Suggests a number of probe points taking the probe's offset into account.
+        Used to perform calibration tasks.
         :param calibration_point_count: The number of probe points to request
+        :param probe_offset: The offset of the probe from the toolhead
         :return: A list of probe points (x,y)
         """
+
+        probe_dist_from_center = math.hypot(probe_offset[0], probe_offset[1])
+
         # Always probe the center
         calibration_points = [[0, 0]]
         # Generate a list of probe points [x,y] in a circle defined by delta_probe_radius
         for i in range(calibration_point_count):
-            calibration_points.append([ math.sin(2*math.pi/calibration_point_count*i) * self.delta_probe_radius, 
-                                        math.cos(2*math.pi/calibration_point_count*i) * self.delta_probe_radius])               
+            calibration_points.append([ math.sin(2*math.pi/calibration_point_count*i) * max(0, self.delta_probe_radius - probe_dist_from_center),
+                                        math.cos(2*math.pi/calibration_point_count*i) * max(0, self.delta_probe_radius - probe_dist_from_center)])
         return calibration_points
         
     def calculate_calibration_params(self, probe_results):
