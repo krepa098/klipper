@@ -495,8 +495,8 @@ class GCodeParser:
             raise error("Probe not configured")
         try:
             results = probe.probe_points(probe_points)
-            corrections = self.toolhead.kin.calibrate(results)
-            self.toolhead.kin.queue_corrections(corrections)
+            corrections = self.toolhead.kin.calculate_calibration_params(results)
+            self.toolhead.kin.set_pending_corrections(corrections)
             # Inform the user about the pending corrections
             self.respond("Corrections: %s" % str(corrections))
             # Home

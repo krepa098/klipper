@@ -291,11 +291,11 @@ class DeltaKinematics:
                                         math.cos(2*math.pi/calibration_point_count*i) * self.delta_probe_radius])               
         return calibration_points
         
-    def calibrate(self, probe_results):
+    def calculate_calibration_params(self, probe_results):
         """
-        Calculates a set of delta parameters minimizing the error in the delta kinematics.
+        Calculates an optimized set of delta parameters.
         :param probe_results: The probe results (see probe.ProbeResults)
-        :return: Dictionary containing the delta parameters
+        :return: Dictionary containing the delta parameters or None if the optimization fails
         """
 
         # convert to actuator positions
@@ -338,15 +338,8 @@ class DeltaKinematics:
         endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]
         radius = out.params['radius'].value
 
-        # Normalize endstops
+        # Normalize endstops (currently not needed)
         #endstop_corrections = np.array(endstop_corrections) - min(endstop_corrections)
-
-        logging.info(
-            "\n\n=============================\nAngles [%.2f, %.2f, %.2f] \n Endstops [%.2f, %.2f, %.2f] \n Delta radius [%.2f]"
-            % (angle_corrections[0],angle_corrections[1],angle_corrections[2],
-               endstop_corrections[0],endstop_corrections[1],endstop_corrections[2],
-               radius)
-            )
 
         # Calculate the std after calibration
         corr = [actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
@@ -357,9 +350,13 @@ class DeltaKinematics:
                 'radius': radius,
                 'std': np.std(z_corr)}
 
-    # Corrections are not applied until the next call to home
-    def queue_corrections(self, corrections):
+    def set_pending_corrections(self, corrections):
+        """
+        Sets the correction parameters to be applied on the next call to home.
+        :param corrections: Parameters obtained by calling calculate_calibration_params
+        """
         self.pending_corrections = corrections
+        self.need_home = True
 
 ######################################################################
 # Calibration helper functions
