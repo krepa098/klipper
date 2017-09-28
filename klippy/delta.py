@@ -278,6 +278,11 @@ class DeltaKinematics:
                     vt_startz, vt_startxy_d, vt_arm_d, movez_r)
                     
     def suggest_probe_points(self, calibration_point_count):
+        """
+        Suggests a number of probe points. Used to perform calibration tasks.
+        :param calibration_point_count: The number of probe points to request
+        :return: A list of probe points (x,y)
+        """
         # Always probe the center
         calibration_points = [[0, 0]]
         # Generate a list of probe points [x,y] in a circle defined by delta_probe_radius
@@ -287,7 +292,13 @@ class DeltaKinematics:
         return calibration_points
         
     def calibrate(self, probe_results):
-        # convert 
+        """
+        Calculates a set of delta parameters minimizing the error in the delta kinematics.
+        :param probe_results: The probe results (see probe.ProbeResults)
+        :return: Dictionary containing the delta parameters
+        """
+
+        # convert to actuator positions
         actuator_pos = [self._cartesian_to_actuator([p[0], p[1], h]) for p, h in zip(probe_results.points, probe_results.heights)]
 
         def residual(params, x, data, actuator_to_cartesian, eps_data):
@@ -355,6 +366,17 @@ class DeltaKinematics:
 ######################################################################
 
 def actuator_to_cartesian(pos, angles, arm_length2, radius, angle_corrections, endstop_corrections):
+    """
+    Used to modelize a Delta printer using the parameters below.
+    :param pos: The position in actuator coords
+    :param angles: The tower angles
+    :param arm_length2: The arm length squared
+    :param radius: The delta radius
+    :param angle_corrections: The tower angle corrections
+    :param endstop_corrections: The endstop corrections
+    :return: The cartesian coords corresponding to the actuator positions
+    """
+
     towers = [(math.cos(math.radians(angle + correction)) * radius,
                math.sin(math.radians(angle + correction)) * radius)
               for angle, correction in zip(angles, angle_corrections)]

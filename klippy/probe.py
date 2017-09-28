@@ -26,8 +26,12 @@ class PrinterProbe:
         for s in z_steppers:
             self.mcu_probe.add_stepper(s.mcu_stepper)
         self.min_step_dist = min(s.step_dist for s in z_steppers)
-    # External commands
+
     def probe_height(self):
+        """
+        Probes the height at the current toolhead position.
+        :return: The height to the bed taking the probe's Z offset into account
+        """
         # Start homing and issue move
         pos = self.toolhead.get_position()
         pos[2] -= self.z_distance
@@ -47,6 +51,11 @@ class PrinterProbe:
         return self.toolhead.get_position()[2] + self.offset[2]
          
     def probe_points(self, points):
+        """
+        Probes the given points.
+        :param points: List of coordinates to probe (x,y,z)
+        :return: The probe results (see ProbeResults)
+        """
         results = ProbeResults()
         results.points = points
         results.count = len(points)

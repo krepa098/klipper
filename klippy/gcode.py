@@ -503,7 +503,7 @@ class GCodeParser:
             self.cmd_G28(params)
         except homing.EndstopError as e:
             self.respond_error(str(e))
-    cmd_CHECKDELTACALIBRATION_help = "TODO"
+    cmd_CHECKDELTACALIBRATION_help = "Probes a set of points and prints the standard deviation"
     def cmd_CHECKDELTACALIBRATION(self, params):
         if not isinstance(self.toolhead.kin, delta.DeltaKinematics):
             return self.respond_error("This command is only available on Delta printers")
