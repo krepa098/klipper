@@ -294,7 +294,7 @@ class GCodeParser:
         'G1', 'G4', 'G20', 'G28', 'G90', 'G91', 'G92',
         'M82', 'M83', 'M18', 'M105', 'M104', 'M109', 'M112', 'M114', 'M115',
         'M140', 'M190', 'M106', 'M107', 'M206', 'M400',
-        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'PROBEDELTA',
+        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'CALIBRATEDELTA',
         'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP']
     cmd_G1_aliases = ['G0']
     def cmd_G1(self, params):
@@ -484,8 +484,8 @@ class GCodeParser:
         except homing.EndstopError as e:
             self.respond_error(str(e))
         self.last_position = self.toolhead.get_position()
-    cmd_PROBEDELTA_help = "Probe Delta"
-    def cmd_PROBEDELTA(self, params):
+    cmd_CALIBRATEDELTA_help = "Performs the calibration of a Delta printer"
+    def cmd_CALIBRATEDELTA(self, params):
         probe = self.printer.objects.get("probe")
         probe_points = self.toolhead.kin.suggest_probe_points(6)
         if probe is None:
@@ -493,13 +493,11 @@ class GCodeParser:
         try:
             results = probe.probe_points(probe_points)
             corrections = self.toolhead.kin.calibrate(results)
-
+            self.toolhead.kin.queue_corrections(corrections)
             # Inform the user about the pending corrections
             self.respond("Corrections: %s" % str(corrections))
-
-            # Queue corrections to be applied on G28
-            self.toolhead.kin.queue_corrections(corrections)
-            self.cmd_G28(params)  # Home
+            # Home
+            self.cmd_G28(params)
         except homing.EndstopError as e:
             logging.info(str(e))
             self.respond_error(str(e))
