@@ -286,13 +286,21 @@ class DeltaKinematics:
         """
 
         probe_dist_from_center = math.hypot(probe_offset[0], probe_offset[1])
+        probe_radius = max(0, self.delta_probe_radius - probe_dist_from_center)
+        max_points_per_orbit = 6
 
         # Always probe the center
         calibration_points = [[0, 0]]
+
         # Generate a list of probe points [x,y] in a circle defined by delta_probe_radius
+        orbit = 1
         for i in range(calibration_point_count):
-            calibration_points.append([ math.sin(2*math.pi/calibration_point_count*i) * max(0, self.delta_probe_radius - probe_dist_from_center),
-                                        math.cos(2*math.pi/calibration_point_count*i) * max(0, self.delta_probe_radius - probe_dist_from_center)])
+            orbit = (i / max_points_per_orbit) + 1
+            div = min(max_points_per_orbit, (calibration_point_count - max_points_per_orbit * (orbit-1)))  # Divisions per orbit
+            c = i - orbit * max_points_per_orbit  # Current index in the orbit
+            calibration_points.append([ math.sin(2*math.pi/div*c) * probe_radius * 1.0 / orbit,
+                                        math.cos(2*math.pi/div*c) * probe_radius * 1.0 / orbit])
+
         return calibration_points
         
     def calculate_calibration_params(self, probe_results):
@@ -318,13 +326,13 @@ class DeltaKinematics:
             return (np.array(data) - np.array(model))/eps_data
         
         params = Parameters()
-        params.add('angle_a', value=0.0, min=-3.0, max=3.0)
-        params.add('angle_b', value=0.0, min=-3.0, max=3.0)
+        params.add('radius', value=self.radius, vary=probe_results.count > 3)
+        params.add('endstop_a', value=0.0, vary=probe_results.count > 3)
+        params.add('endstop_b', value=0.0, vary=probe_results.count > 3)
+        params.add('endstop_c', value=0.0, vary=probe_results.count > 3)
+        params.add('angle_a', value=0.0, min=-3.0, max=3.0, vary=probe_results.count > 6)
+        params.add('angle_b', value=0.0, min=-3.0, max=3.0, vary=probe_results.count > 6)
         params.add('angle_c', value=0.0, min=-3.0, max=3.0, vary=False)
-        params.add('endstop_a', value=0.0)
-        params.add('endstop_b', value=0.0)
-        params.add('endstop_c', value=0.0)
-        params.add('radius', value=self.radius)
 
         x = np.array(actuator_pos)
         data = [0.] * probe_results.count  # The expected result is zero in all points
