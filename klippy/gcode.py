@@ -490,7 +490,7 @@ class GCodeParser:
             return self.respond_error("This command is only available on Delta printers")
 
         probe = self.printer.objects.get("probe")
-        probe_points = self.toolhead.kin.suggest_probe_points(6, probe.offset)
+        probe_points = self.toolhead.kin.suggest_probe_points(self.get_int('P', params, 6), probe.offset)
         if probe is None:
             raise error("Probe not configured")
         try:
@@ -509,7 +509,7 @@ class GCodeParser:
             return self.respond_error("This command is only available on Delta printers")
 
         probe = self.printer.objects.get("probe")
-        probe_points = self.toolhead.kin.suggest_probe_points(6, probe.offset)
+        probe_points = self.toolhead.kin.suggest_probe_points(self.get_int('P', params, 6), probe.offset)
         if probe is None:
             raise error("Probe not configured")
         try:
