@@ -276,11 +276,11 @@ class DeltaKinematics:
                     move_time, decel_d, cruise_v, -accel,
                     vt_startz, vt_startxy_d, vt_arm_d, movez_r)
                     
-    def suggest_probe_points(self, calibration_point_count, probe_offset):
+    def suggest_probe_points(self, count, probe_offset):
         """
         Suggests a number of probe points taking the probe's offset into account.
         Used to perform calibration tasks.
-        :param calibration_point_count: The number of probe points to request
+        :param count: The number of probe points to request
         :param probe_offset: The offset of the probe from the toolhead
         :return: A list of probe points (x,y)
         """
@@ -290,16 +290,15 @@ class DeltaKinematics:
         max_points_per_orbit = 6
 
         # Always probe the center
-        calibration_points = [[0, 0]]
+        calibration_points = [[0., 0.]]
 
         # Generate a list of probe points [x,y] in a circle defined by delta_probe_radius
-        orbit = 1
-        for i in range(calibration_point_count):
+        for i in range(count):
             orbit = (i / max_points_per_orbit) + 1
-            div = min(max_points_per_orbit, (calibration_point_count - max_points_per_orbit * (orbit-1)))  # Divisions per orbit
+            div = min(max_points_per_orbit, (count - max_points_per_orbit * (orbit-1)))  # Angular divisions for orbit
             c = i - orbit * max_points_per_orbit  # Current index in the orbit
-            calibration_points.append([ math.sin(2*math.pi/div*c) * probe_radius * 1.0 / orbit,
-                                        math.cos(2*math.pi/div*c) * probe_radius * 1.0 / orbit])
+            calibration_points.append([math.sin(2 * math.pi / div * c) * probe_radius * 1.0 / orbit,
+                                       math.cos(2 * math.pi / div * c) * probe_radius * 1.0 / orbit])
 
         return calibration_points
         
