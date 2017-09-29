@@ -20,8 +20,10 @@ class DeltaKinematics:
                          for n in ['a', 'b', 'c']]
         self.need_motor_enable = self.need_home = True
         self.delta_probe_radius = config.getfloat('delta_probe_radius', 0.)
-        self.endstop_corrections = [config.getfloat('delta_endstop_' + n, 0.) for n in ['a', 'b', 'c']]
-        self.angle_corrections = [config.getfloat('delta_angle_' + n, 0.) for n in ['a', 'b', 'c']]
+        self.endstop_corrections = [config.getsection('stepper_' + n).getfloat('correction_endstop', 0.)
+                                    for n in ['a', 'b', 'c']]
+        self.angle_corrections = [config.getsection('stepper_' + n).getfloat('correction_angle', 0.)
+                                  for n in ['a', 'b', 'c']]
         self.pending_corrections = None
         self.radius = config.getfloat('delta_radius', above=0.)
         self.arm_length = config.getfloat('delta_arm_length', above=self.radius)
