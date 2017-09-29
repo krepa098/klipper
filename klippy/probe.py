@@ -69,6 +69,7 @@ class PrinterProbe:
             # Move back up
             self.toolhead.move(pos, self.speed * 5.0)
 
+        self.toolhead.wait_moves()
         results.std = std(results.heights)
         return results
 
