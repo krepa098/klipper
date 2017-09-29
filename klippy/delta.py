@@ -14,7 +14,19 @@ StepList = (0, 1, 2)
 SLOW_RATIO = 3.
 
 class DeltaKinematics:
-    def __init__(self, toolhead, printer, config):      
+    def __init__(self, toolhead, printer, config):
+        # Those are set in calculate_params but are defined here to keep the lint happy
+        self.towers = None
+        self.slow_xy2 = None
+        self.limit_z = None
+        self.very_slow_xy2 = None
+        self.max_xy2 = None
+        self.max_z = None
+        self.arm_length2 = None
+        self.limit_xy2 = None
+        self.pending_corrections = None
+
+        # Cfg
         self.steppers = [stepper.PrinterHomingStepper(
             printer, config.getsection('stepper_' + n), n)
                          for n in ['a', 'b', 'c']]
@@ -24,18 +36,11 @@ class DeltaKinematics:
                                     for n in ['a', 'b', 'c']]
         self.angle_corrections = [config.getsection('stepper_' + n).getfloat('correction_angle', 0.)
                                   for n in ['a', 'b', 'c']]
-        self.pending_corrections = None
         self.radius = config.getfloat('delta_radius', above=0.)
         self.arm_length = config.getfloat('delta_arm_length', above=self.radius)
-        self.arm_length2 = self.arm_length**2
-        self.limit_xy2 = -1.
-        self.max_z = min([s.position_endstop for s in self.steppers])
-
-        tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius ** 2)
-        self.limit_z = self.max_z - (self.arm_length - tower_height_at_zeros)
-        logging.info(
-            "Delta max build height %.2fmm (radius tapered above %.2fmm)" % (
-                self.max_z, self.limit_z))
+        self.angles = [config.getsection('stepper_a').getfloat('angle', 210.),
+                       config.getsection('stepper_b').getfloat('angle', 330.),
+                       config.getsection('stepper_c').getfloat('angle', 90.)]
 
         # Setup stepper max halt velocity
         self.max_velocity, self.max_accel = toolhead.get_max_velocity()
@@ -46,20 +51,12 @@ class DeltaKinematics:
         for s in self.steppers:
             s.set_max_jerk(max_xy_halt_velocity, self.max_accel)
 
-        self.angles = [config.getsection('stepper_a').getfloat('angle', 210.),
-                       config.getsection('stepper_b').getfloat('angle', 330.),
-                       config.getsection('stepper_c').getfloat('angle', 90.)]
-
-        self.towers = []
-        self.slow_xy2 = 0.0
-        self.very_slow_xy2 = 0.0
-        self.max_xy2 = 0.0
-
         self.calculate_params()
         self.set_position([0., 0., 0.])
 
     def calculate_params(self):
-        logging.info("Updating delta kinematics")
+        self.arm_length2 = self.arm_length**2
+        self.limit_xy2 = -1.
 
         # Apply endstop corrections to the steppers
         for stepper, corr in zip(self.steppers, self.endstop_corrections):
@@ -74,7 +71,8 @@ class DeltaKinematics:
         # Determine tower locations in cartesian space
         self.towers = [(math.cos(math.radians(angle + correction)) * self.radius,
                         math.sin(math.radians(angle + correction)) * self.radius)
-                        for angle, correction in zip(self.angles, self.angle_corrections)]
+                       for angle, correction in zip(self.angles, self.angle_corrections)]
+        logging.info("Delta max build height %.2fmm (radius tapered above %.2fmm)" % (self.max_z, self.limit_z))
 
         # Find the point where an XY move could result in excessive
         # tower movement
