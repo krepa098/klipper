@@ -66,8 +66,7 @@ class DeltaKinematics:
 
         tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius ** 2)
 
-        self.max_z = min([s.position_endstop + endstop_correction for s, endstop_correction in
-                          zip(self.steppers, self.endstop_corrections)])
+        self.max_z = min([s.position_endstop for s in self.steppers])
         self.limit_z = self.max_z - (self.arm_length - tower_height_at_zeros)
 
         # Determine tower locations in cartesian space
