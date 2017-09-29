@@ -320,12 +320,12 @@ class DeltaKinematics:
             return (np.array(data) - np.array(model))/eps_data
         
         params = Parameters()
-        params.add('angle_a', value=self.angle_corrections[0], min=-3.0, max=3.0)
-        params.add('angle_b', value=self.angle_corrections[1], min=-3.0, max=3.0)
-        params.add('angle_c', value=self.angle_corrections[2], min=-3.0, max=3.0, vary=False)
-        params.add('endstop_a', value=self.endstop_corrections[0])
-        params.add('endstop_b', value=self.endstop_corrections[1])
-        params.add('endstop_c', value=self.endstop_corrections[2])
+        params.add('angle_a', value=0.0, min=-3.0, max=3.0)
+        params.add('angle_b', value=0.0, min=-3.0, max=3.0)
+        params.add('angle_c', value=0.0, min=-3.0, max=3.0, vary=False)
+        params.add('endstop_a', value=0.0)
+        params.add('endstop_b', value=0.0)
+        params.add('endstop_c', value=0.0)
         params.add('radius', value=self.radius)
 
         x = np.array(actuator_pos)
