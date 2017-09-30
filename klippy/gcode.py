@@ -498,7 +498,16 @@ class GCodeParser:
             corrections = self.toolhead.kin.calculate_calibration_params(results)
             self.toolhead.kin.set_pending_corrections(corrections)
             # Inform the user about the pending corrections
-            self.respond("Corrections: %s" % str(corrections))
+            self.respond("Angle corrections: [%.2f, %.2f, %.2f]"
+                         % (corrections['angle_corrections'][0],
+                            corrections['angle_corrections'][1],
+                            corrections['angle_corrections'][2]))
+            self.respond("Endstop corrections: [%.2f, %.2f, %.2f]"
+                         % (corrections['endstop_corrections'][0],
+                            corrections['endstop_corrections'][1],
+                            corrections['endstop_corrections'][2]))
+            self.respond("Delta radius: %.2f" % corrections['radius'])
+            self.respond("Std: %.2f" % corrections['std'])
             # Home
             self.cmd_G28(params)
         except homing.EndstopError as e:
