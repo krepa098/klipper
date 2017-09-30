@@ -294,7 +294,7 @@ class GCodeParser:
         'G1', 'G4', 'G20', 'G28', 'G90', 'G91', 'G92',
         'M82', 'M83', 'M18', 'M105', 'M104', 'M109', 'M112', 'M114', 'M115',
         'M140', 'M190', 'M106', 'M107', 'M206', 'M400',
-        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'CALIBRATEDELTA', 'CHECKDELTACALIBRATION',
+        'IGNORE', 'QUERY_ENDSTOPS', 'PID_TUNE', 'SET_SERVO', 'PROBE', 'CALIBRATE_DELTA', 'CHECK_DELTA_CALIBRATION',
         'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP']
     cmd_G1_aliases = ['G0']
     def cmd_G1(self, params):
@@ -484,8 +484,8 @@ class GCodeParser:
         except homing.EndstopError as e:
             self.respond_error(str(e))
         self.last_position = self.toolhead.get_position()
-    cmd_CALIBRATEDELTA_help = "Performs the calibration of a Delta printer"
-    def cmd_CALIBRATEDELTA(self, params):
+    cmd_CALIBRATE_DELTA_help = "Performs the calibration of a Delta printer using the least squares method"
+    def cmd_CALIBRATE_DELTA(self, params):
         if not isinstance(self.toolhead.kin, delta.DeltaKinematics):
             return self.respond_error("This command is only available on Delta printers")
 
@@ -503,8 +503,9 @@ class GCodeParser:
             self.cmd_G28(params)
         except homing.EndstopError as e:
             self.respond_error(str(e))
-    cmd_CHECKDELTACALIBRATION_help = "Probes a set of points and prints the standard deviation"
-    def cmd_CHECKDELTACALIBRATION(self, params):
+    cmd_CHECK_DELTA_CALIBRATION_help = "Probes a set of points and prints the standard deviation, " \
+                                       "mean, min and max of the results"
+    def cmd_CHECK_DELTA_CALIBRATION(self, params):
         if not isinstance(self.toolhead.kin, delta.DeltaKinematics):
             return self.respond_error("This command is only available on Delta printers")
 
