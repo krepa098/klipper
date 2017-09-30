@@ -312,7 +312,7 @@ class DeltaKinematics:
         # convert to actuator positions
         actuator_pos = [self._cartesian_to_actuator([p[0], p[1], h]) for p, h in zip(probe_results.points, probe_results.heights)]
 
-        def residual(params, x, data, actuator_to_cartesian, eps_data):
+        def residual(params, x, actuator_to_cartesian):
             angle_corrections = [params['angle_a'], params['angle_b'], params['angle_c']]
             endstop_corrections = [params['endstop_a'], params['endstop_b'], params['endstop_c']]
             radius = params['radius']
@@ -321,8 +321,8 @@ class DeltaKinematics:
             # probe positions
             model = [actuator_to_cartesian(xx, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections)[2] for xx in x]
 
-            # Return the error i.e. the new distance between the toolhead and the bed
-            return (numpy.array(data) - numpy.array(model))/eps_data
+            # Return the error i.e. the distance between the toolhead and the bed
+            return model
         
         params = lmfit.Parameters()
         params.add('radius', value=self.radius, vary=probe_results.count > 3)
@@ -333,12 +333,8 @@ class DeltaKinematics:
         params.add('angle_b', value=0.0, min=-3.0, max=3.0, vary=probe_results.count > 6)
         params.add('angle_c', value=0.0, min=-3.0, max=3.0, vary=False)
 
-        x = numpy.array(actuator_pos)
-        data = [0.] * probe_results.count  # The expected result is zero in all points
-        eps_data = 1.0
-
         # Perform the optimization using 6 parameters i.e. we need a least 6 test points
-        out = lmfit.minimize(residual, params, args=(x, data, actuator_to_cartesian, eps_data))
+        out = lmfit.minimize(residual, params, args=(actuator_pos, actuator_to_cartesian))
 
         # The optimization may fail under certain circumstances
         if not out.success:
@@ -349,10 +345,7 @@ class DeltaKinematics:
         endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]
         radius = out.params['radius'].value
 
-        # Normalize endstops (currently not needed)
-        #endstop_corrections = np.array(endstop_corrections) - min(endstop_corrections)
-
-        # Calculate the std after calibration
+        # Calculate the estimated std after calibration
         corr = [actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
         z_corr = numpy.array([p[2] for p in corr])
 
