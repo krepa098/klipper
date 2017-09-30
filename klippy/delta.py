@@ -27,6 +27,7 @@ class DeltaKinematics:
         self.pending_corrections = None
 
         # Cfg
+        self.endpos = [config.getsection('stepper_' + n).getfloat('position_endstop') for n in ['a', 'b', 'c']]
         self.steppers = [stepper.PrinterHomingStepper(
             printer, config.getsection('stepper_' + n), n)
                          for n in ['a', 'b', 'c']]
@@ -59,8 +60,8 @@ class DeltaKinematics:
         self.limit_xy2 = -1.
 
         # Apply endstop corrections to the steppers
-        for stepper, corr in zip(self.steppers, self.endstop_corrections):
-            stepper.position_endstop += corr
+        for stepper, endpos, corr in zip(self.steppers, self.endpos, self.endstop_corrections):
+            stepper.position_endstop = endpos + corr
             logging.info("Adj. stepper endstop %.2f" % (stepper.position_endstop))
 
         tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius ** 2)
@@ -310,7 +311,8 @@ class DeltaKinematics:
         """
 
         # convert to actuator positions
-        actuator_pos = [self._cartesian_to_actuator([p[0], p[1], h]) for p, h in zip(probe_results.points, probe_results.heights)]
+        actuator_pos = [self._cartesian_to_actuator([p[0], p[1], h])
+                        for p, h in zip(probe_results.points, probe_results.heights)]
 
         def residual(params, x, actuator_to_cartesian):
             angle_corrections = [params['angle_a'], params['angle_b'], params['angle_c']]
@@ -342,7 +344,8 @@ class DeltaKinematics:
 
         # Extract results
         angle_corrections = [out.params['angle_a'].value, out.params['angle_b'].value, out.params['angle_c'].value]
-        endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]
+        endstop_corrections = (numpy.array([out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value])
+                               + numpy.array(self.endstop_corrections))
         radius = out.params['radius'].value
 
         # Calculate the estimated std after calibration
