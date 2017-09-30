@@ -514,7 +514,8 @@ class GCodeParser:
             raise error("Probe not configured")
         try:
             results = probe.probe_points(probe_points)
-            self.respond("std: [%f.2]\nheights: [%s]" % (results.std, str(results.heights)))
+            self.respond("std: %.2f\nmean: %.2f\nmin: %.2f\nmax: %.2f"
+                         % (results.std, results.mean, min(results.heights), max(results.heights)))
             self.cmd_G28(params)
         except homing.EndstopError as e:
             self.respond_error(str(e))

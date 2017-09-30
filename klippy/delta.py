@@ -5,8 +5,8 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math, logging
 import stepper, homing
-import numpy as np
-from lmfit import minimize, Parameters
+import numpy
+import lmfit
 
 StepList = (0, 1, 2)
 
@@ -322,9 +322,9 @@ class DeltaKinematics:
             model = [actuator_to_cartesian(xx, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections)[2] for xx in x]
 
             # Return the error i.e. the new distance between the toolhead and the bed
-            return (np.array(data) - np.array(model))/eps_data
+            return (numpy.array(data) - numpy.array(model))/eps_data
         
-        params = Parameters()
+        params = lmfit.Parameters()
         params.add('radius', value=self.radius, vary=probe_results.count > 3)
         params.add('endstop_a', value=0.0, vary=probe_results.count > 3)
         params.add('endstop_b', value=0.0, vary=probe_results.count > 3)
@@ -333,12 +333,12 @@ class DeltaKinematics:
         params.add('angle_b', value=0.0, min=-3.0, max=3.0, vary=probe_results.count > 6)
         params.add('angle_c', value=0.0, min=-3.0, max=3.0, vary=False)
 
-        x = np.array(actuator_pos)
+        x = numpy.array(actuator_pos)
         data = [0.] * probe_results.count  # The expected result is zero in all points
         eps_data = 1.0
 
         # Perform the optimization using 6 parameters i.e. we need a least 6 test points
-        out = minimize(residual, params, args=(x, data, actuator_to_cartesian, eps_data))
+        out = lmfit.minimize(residual, params, args=(x, data, actuator_to_cartesian, eps_data))
 
         # The optimization may fail under certain circumstances
         if not out.success:
@@ -354,12 +354,12 @@ class DeltaKinematics:
 
         # Calculate the std after calibration
         corr = [actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
-        z_corr = np.array([p[2] for p in corr])
+        z_corr = numpy.array([p[2] for p in corr])
 
         return {'angle_corrections': angle_corrections,
                 'endstop_corrections': endstop_corrections,
                 'radius': radius,
-                'std': np.std(z_corr)}
+                'std': numpy.std(z_corr)}
 
     def set_pending_corrections(self, corrections):
         """
