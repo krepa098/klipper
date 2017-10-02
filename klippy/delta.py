@@ -27,16 +27,12 @@ class DeltaKinematics:
         self.pending_corrections = None
 
         # Cfg
-        self.endpos = [config.getsection('stepper_' + n).getfloat('position_endstop') for n in ['a', 'b', 'c']]
+        self.pos_endstops = [config.getsection('stepper_' + n).getfloat('position_endstop') for n in ['a', 'b', 'c']]
         self.steppers = [stepper.PrinterHomingStepper(
             printer, config.getsection('stepper_' + n), n)
                          for n in ['a', 'b', 'c']]
         self.need_motor_enable = self.need_home = True
         self.delta_probe_radius = config.getfloat('delta_probe_radius', 0.)
-        self.endstop_corrections = [config.getsection('stepper_' + n).getfloat('correction_endstop', 0.)
-                                    for n in ['a', 'b', 'c']]
-        self.angle_corrections = [config.getsection('stepper_' + n).getfloat('correction_angle', 0.)
-                                  for n in ['a', 'b', 'c']]
         self.radius = config.getfloat('delta_radius', above=0.)
         self.arm_length = config.getfloat('delta_arm_length', above=self.radius)
         self.angles = [config.getsection('stepper_a').getfloat('angle', 210.),
@@ -60,8 +56,8 @@ class DeltaKinematics:
         self.limit_xy2 = -1.
 
         # Apply endstop corrections to the steppers
-        for stepper, endpos, corr in zip(self.steppers, self.endpos, self.endstop_corrections):
-            stepper.position_endstop = endpos + corr
+        for stepper, endpos in zip(self.steppers, self.pos_endstops):
+            stepper.position_endstop = endpos
             logging.info("Adj. stepper endstop %.2f" % (stepper.position_endstop))
 
         tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius ** 2)
@@ -70,9 +66,9 @@ class DeltaKinematics:
         self.limit_z = self.max_z - (self.arm_length - tower_height_at_zeros)
 
         # Determine tower locations in cartesian space
-        self.towers = [(math.cos(math.radians(angle + correction)) * self.radius,
-                        math.sin(math.radians(angle + correction)) * self.radius)
-                       for angle, correction in zip(self.angles, self.angle_corrections)]
+        self.towers = [(math.cos(math.radians(angle)) * self.radius,
+                        math.sin(math.radians(angle)) * self.radius)
+                       for angle in self.angles]
         logging.info("Delta max build height %.2fmm (radius tapered above %.2fmm)" % (self.max_z, self.limit_z))
 
         # Find the point where an XY move could result in excessive
@@ -140,8 +136,8 @@ class DeltaKinematics:
     def home(self, homing_state):
         # Check for pending delta corrections
         if self.pending_corrections:
-            self.angle_corrections = self.pending_corrections['angle_corrections']
-            self.endstop_corrections = self.pending_corrections['endstop_corrections']
+            self.angles = self.pending_corrections['angles']
+            self.pos_endstops = self.pending_corrections['pos_endstops']
             self.radius = self.pending_corrections['radius']
             self.pending_corrections = None
             self.calculate_params()
@@ -344,18 +340,21 @@ class DeltaKinematics:
 
         # Extract results
         angle_corrections = [out.params['angle_a'].value, out.params['angle_b'].value, out.params['angle_c'].value]
-        endstop_corrections = (numpy.array([out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value])
-                               + numpy.array(self.endstop_corrections))
+        endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]
         radius = out.params['radius'].value
 
         # Calculate the estimated std after calibration
         corr = [actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
-        z_corr = numpy.array([p[2] for p in corr])
+        std = numpy.std([p[2] for p in corr])
 
-        return {'angle_corrections': angle_corrections,
-                'endstop_corrections': endstop_corrections,
+        # Calculate corrected angle and endstop positions
+        corrected_angles = numpy.array(self.angles) + numpy.array(angle_corrections)
+        corrected_pos_endstop = numpy.array(self.pos_endstops) + numpy.array(endstop_corrections)
+
+        return {'angles': corrected_angles,
+                'pos_endstops': corrected_pos_endstop,
                 'radius': radius,
-                'std': numpy.std(z_corr)}
+                'std': std}
 
     def set_pending_corrections(self, corrections):
         """

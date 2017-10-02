@@ -498,16 +498,17 @@ class GCodeParser:
             corrections = self.toolhead.kin.calculate_calibration_params(results)
             self.toolhead.kin.set_pending_corrections(corrections)
             # Inform the user about the pending corrections
-            self.respond("Angle corrections: [%.2f, %.2f, %.2f]"
-                         % (corrections['angle_corrections'][0],
-                            corrections['angle_corrections'][1],
-                            corrections['angle_corrections'][2]))
-            self.respond("Endstop corrections: [%.2f, %.2f, %.2f]"
-                         % (corrections['endstop_corrections'][0],
-                            corrections['endstop_corrections'][1],
-                            corrections['endstop_corrections'][2]))
-            self.respond("Delta radius: %.2f" % corrections['radius'])
+            self.respond("Corrected tower angles: [%.2f, %.2f, %.2f]"
+                         % (corrections['angles'][0],
+                            corrections['angles'][1],
+                            corrections['angles'][2]))
+            self.respond("Corrected endstop positions: [%.2f, %.2f, %.2f]"
+                         % (corrections['pos_endstops'][0],
+                            corrections['pos_endstops'][1],
+                            corrections['pos_endstops'][2]))
+            self.respond("Corrected delta radius: %.2f" % corrections['radius'])
             self.respond("Std: %.2f" % corrections['std'])
+            self.respond("Do not forget to update your config file!")
             # Home
             self.cmd_G28(params)
         except homing.EndstopError as e:
@@ -524,8 +525,10 @@ class GCodeParser:
             raise error("Probe not configured")
         try:
             results = probe.probe_points(probe_points)
-            self.respond("std: %.2f\nmean: %.2f\nmin: %.2f\nmax: %.2f"
-                         % (results.std, results.mean, min(results.heights), max(results.heights)))
+            self.respond("Std: %.2f" % results.std)
+            self.respond("Mean: %.2f" % results.mean)
+            self.respond("Min: %.2f" % min(results.heights))
+            self.respond("Max: %.2f" % max(results.heights))
             self.cmd_G28(params)
         except homing.EndstopError as e:
             self.respond_error(str(e))
