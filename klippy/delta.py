@@ -58,7 +58,6 @@ class DeltaKinematics:
         # Apply endstop corrections to the steppers
         for stepper, endpos in zip(self.steppers, self.pos_endstops):
             stepper.position_endstop = endpos
-            logging.info("Adj. stepper endstop %.2f" % (stepper.position_endstop))
 
         tower_height_at_zeros = math.sqrt(self.arm_length2 - self.radius ** 2)
 
