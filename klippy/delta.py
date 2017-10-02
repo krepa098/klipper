@@ -310,8 +310,11 @@ class DeltaKinematics:
                         for p, h in zip(probe_results.points, probe_results.heights)]
 
         def residual(params, x, actuator_to_cartesian):
+            height = params['height']
             angle_corrections = [params['angle_a'], params['angle_b'], params['angle_c']]
-            endstop_corrections = [params['endstop_a'], params['endstop_b'], params['endstop_c']]
+            endstop_corrections = [params['endstop_a'] + height,
+                                   params['endstop_b'] + height,
+                                   params['endstop_c'] + height]
             radius = params['radius']
 
             # The model returns the z value for the given design parameters using the actuator positions of the current
@@ -322,6 +325,7 @@ class DeltaKinematics:
             return model
         
         params = lmfit.Parameters()
+        params.add('height', value=0.0, vary=probe_results.count <= 3)
         params.add('radius', value=self.radius, vary=probe_results.count > 3)
         params.add('endstop_a', value=0.0, vary=probe_results.count > 3)
         params.add('endstop_b', value=0.0, vary=probe_results.count > 3)
@@ -338,6 +342,7 @@ class DeltaKinematics:
             return None
 
         # Extract results
+        height_correction = out.params['height'].value
         angle_corrections = [out.params['angle_a'].value, out.params['angle_b'].value, out.params['angle_c'].value]
         endstop_corrections = [out.params['endstop_a'].value, out.params['endstop_b'].value, out.params['endstop_c'].value]
         radius = out.params['radius'].value
@@ -348,7 +353,7 @@ class DeltaKinematics:
 
         # Calculate corrected angle and endstop positions
         corrected_angles = numpy.array(self.angles) + numpy.array(angle_corrections)
-        corrected_pos_endstop = numpy.array(self.pos_endstops) + numpy.array(endstop_corrections)
+        corrected_pos_endstop = numpy.array(self.pos_endstops) + numpy.array(endstop_corrections) + numpy.array(height_correction)
 
         return {'angles': corrected_angles,
                 'pos_endstops': corrected_pos_endstop,
