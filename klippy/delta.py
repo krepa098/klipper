@@ -335,7 +335,7 @@ class DeltaKinematics:
         params.add('angle_c', value=0.0, min=-3.0, max=3.0, vary=False)
 
         # Perform the optimization using 6 parameters i.e. we need a least 6 test points
-        out = lmfit.minimize(residual, params, args=(actuator_pos, actuator_to_cartesian))
+        out = lmfit.minimize(residual, params, args=(actuator_pos, model_actuator_to_cartesian))
 
         # The optimization may fail under certain circumstances
         if not out.success:
@@ -348,7 +348,7 @@ class DeltaKinematics:
         radius = out.params['radius'].value
 
         # Calculate the estimated std after calibration
-        corr = [actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
+        corr = [model_actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
         std = numpy.std([p[2] for p in corr])
 
         # Calculate corrected angle and endstop positions
@@ -372,9 +372,9 @@ class DeltaKinematics:
 # Calibration helper functions
 ######################################################################
 
-def actuator_to_cartesian(pos, angles, arm_length2, radius, angle_corrections, endstop_corrections):
+def model_actuator_to_cartesian(pos, angles, arm_length2, radius, angle_corrections, endstop_corrections):
     """
-    Used to modelize a Delta printer using the parameters below.
+    Used to model a Delta printer using the parameters below.
     :param pos: The position in actuator coords
     :param angles: The tower angles
     :param arm_length2: The arm length squared
