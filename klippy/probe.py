@@ -71,12 +71,12 @@ class PrinterProbe:
         for p in points:
             # Move toolhead above probe position
             pos = [p[0], p[1], (self.z_distance * 0.5) - self.offset[2], self.toolhead.get_position()[3]]
-            self.toolhead.move(pos, self.speed * 5.0)
+            self.toolhead.move(pos, self.toolhead.max_velocity)
             # Move down to probe
             height = self.probe_height()
             results.heights.append(height)
-            # Move back up
-            self.toolhead.move(pos, self.speed * 5.0)
+            # Retract
+            self.toolhead.move(pos, self.toolhead.max_velocity)
 
         self.toolhead.wait_moves()
         return results
