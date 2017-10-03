@@ -65,7 +65,7 @@ class DeltaKinematics:
         self.limit_z = self.max_z - (self.arm_length - tower_height_at_zeros)
 
         # Determine tower locations in cartesian space
-        self.towers = model_calculate_towers(self.angles, self.radius, [0., 0., 0.])
+        self.towers = model_tower_positions(self.angles, self.radius, [0., 0., 0.])
         logging.info("Delta max build height %.2fmm (radius tapered above %.2fmm)" % (self.max_z, self.limit_z))
 
         # Find the point where an XY move could result in excessive
@@ -353,7 +353,7 @@ def model_actuator_to_cartesian(pos, angles, arm_length2, radius, angle_correcti
     :return: The cartesian coords corresponding to the actuator positions
     """
 
-    towers = model_calculate_towers(angles, radius, angle_corrections)
+    towers = model_tower_positions(angles, radius, angle_corrections)
 
     # Based on code from Smoothieware
     tower1 = list(towers[0]) + [pos[0] + endstop_corrections[0]]
@@ -386,7 +386,7 @@ def model_actuator_to_cartesian(pos, angles, arm_length2, radius, angle_correcti
 
     return matrix_sub(circumcenter, matrix_mul(normal, dist))
 
-def model_calculate_towers(angles, radius, angle_corrections):
+def model_tower_positions(angles, radius, angle_corrections):
     """
     Calculates the tower positions in XY plane
     :param angles: The angles of the towers (normally 210, 330 and 90)
