@@ -494,6 +494,7 @@ class GCodeParser:
         if probe is None:
             raise error("Probe not configured")
         try:
+            self.cmd_G28(params)
             results = probe.probe_points(probe_points)
             corrections = self.toolhead.kin.calculate_calibration_params(results)
             self.toolhead.kin.set_pending_corrections(corrections)
@@ -509,7 +510,6 @@ class GCodeParser:
             self.respond("Corrected delta radius: %.2f" % corrections['radius'])
             self.respond("Std: %.2f" % corrections['std'])
             self.respond("Do not forget to update your config file!")
-            # Home
             self.cmd_G28(params)
         except homing.EndstopError as e:
             self.respond_error(str(e))
@@ -524,6 +524,7 @@ class GCodeParser:
         if probe is None:
             raise error("Probe not configured")
         try:
+            self.cmd_G28(params)
             results = probe.probe_points(probe_points)
             self.respond("Std: %.2f" % results.std)
             self.respond("Mean: %.2f" % results.mean)
