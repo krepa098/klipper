@@ -48,10 +48,10 @@ class DeltaKinematics:
         for s in self.steppers:
             s.set_max_jerk(max_xy_halt_velocity, self.max_accel)
 
-        self.calculate_params()
+        self._calculate_params()
         self.set_position([0., 0., 0.])
 
-    def calculate_params(self):
+    def _calculate_params(self):
         self.arm_length2 = self.arm_length**2
         self.limit_xy2 = -1.
 
@@ -65,9 +65,7 @@ class DeltaKinematics:
         self.limit_z = self.max_z - (self.arm_length - tower_height_at_zeros)
 
         # Determine tower locations in cartesian space
-        self.towers = [(math.cos(math.radians(angle)) * self.radius,
-                        math.sin(math.radians(angle)) * self.radius)
-                       for angle in self.angles]
+        self.towers = model_calculate_towers(self.angles, self.radius, [0., 0., 0.])
         logging.info("Delta max build height %.2fmm (radius tapered above %.2fmm)" % (self.max_z, self.limit_z))
 
         # Find the point where an XY move could result in excessive
@@ -91,36 +89,7 @@ class DeltaKinematics:
                 for i in StepList]
 
     def _actuator_to_cartesian(self, pos):
-        # Based on code from Smoothieware
-        tower1 = list(self.towers[0]) + [pos[0]]
-        tower2 = list(self.towers[1]) + [pos[1]]
-        tower3 = list(self.towers[2]) + [pos[2]]
-
-        s12 = matrix_sub(tower1, tower2)
-        s23 = matrix_sub(tower2, tower3)
-        s13 = matrix_sub(tower1, tower3)
-
-        normal = matrix_cross(s12, s23)
-
-        magsq_s12 = matrix_magsq(s12)
-        magsq_s23 = matrix_magsq(s23)
-        magsq_s13 = matrix_magsq(s13)
-
-        inv_nmag_sq = 1.0 / matrix_magsq(normal)
-        q = 0.5 * inv_nmag_sq
-
-        a = q * magsq_s23 * matrix_dot(s12, s13)
-        b = -q * magsq_s13 * matrix_dot(s12, s23) # negate because we use s12 instead of s21
-        c = q * magsq_s12 * matrix_dot(s13, s23)
-
-        circumcenter = [tower1[0] * a + tower2[0] * b + tower3[0] * c,
-                        tower1[1] * a + tower2[1] * b + tower3[1] * c,
-                        tower1[2] * a + tower2[2] * b + tower3[2] * c]
-
-        r_sq = 0.5 * q * magsq_s12 * magsq_s23 * magsq_s13
-        dist = math.sqrt(inv_nmag_sq * (self.arm_length2 - r_sq))
-
-        return matrix_sub(circumcenter, matrix_mul(normal, dist))
+        return model_actuator_to_cartesian(pos, self.angles, self.arm_length2, self.radius, [0., 0., 0.], [0., 0., 0.])
 
     def get_position(self):
         spos = [s.mcu_stepper.get_commanded_position() for s in self.steppers]
@@ -139,7 +108,7 @@ class DeltaKinematics:
             self.pos_endstops = self.pending_corrections['pos_endstops']
             self.radius = self.pending_corrections['radius']
             self.pending_corrections = None
-            self.calculate_params()
+            self._calculate_params()
 
         # All axes are homed simultaneously
         homing_state.set_axes([0, 1, 2])
@@ -384,9 +353,7 @@ def model_actuator_to_cartesian(pos, angles, arm_length2, radius, angle_correcti
     :return: The cartesian coords corresponding to the actuator positions
     """
 
-    towers = [(math.cos(math.radians(angle + correction)) * radius,
-               math.sin(math.radians(angle + correction)) * radius)
-              for angle, correction in zip(angles, angle_corrections)]
+    towers = model_calculate_towers(angles, radius, angle_corrections)
 
     # Based on code from Smoothieware
     tower1 = list(towers[0]) + [pos[0] + endstop_corrections[0]]
@@ -418,6 +385,18 @@ def model_actuator_to_cartesian(pos, angles, arm_length2, radius, angle_correcti
     dist = math.sqrt(inv_nmag_sq * (arm_length2 - r_sq))
 
     return matrix_sub(circumcenter, matrix_mul(normal, dist))
+
+def model_calculate_towers(angles, radius, angle_corrections):
+    """
+    Calculates the tower positions in XY plane
+    :param angles: The angles of the towers (normally 210, 330 and 90)
+    :param radius: The delta radius
+    :param angle_corrections: The corrections to apply to the angles
+    :return: The tower positions in XY plane
+    """
+    return [(math.cos(math.radians(angle + correction)) * radius,
+             math.sin(math.radians(angle + correction)) * radius)
+            for angle, correction in zip(angles, angle_corrections)]
 
 ######################################################################
 # Matrix helper functions for 3x1 matrices
