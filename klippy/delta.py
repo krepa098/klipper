@@ -89,7 +89,7 @@ class DeltaKinematics:
                 for i in StepList]
 
     def _actuator_to_cartesian(self, pos):
-        return model_actuator_to_cartesian(pos, self.angles, self.arm_length2, self.radius, [0., 0., 0.], [0., 0., 0.])
+        return model_actuator_to_cartesian(pos, self.arm_length2, self.towers, [0., 0., 0.])
 
     def get_position(self):
         spos = [s.mcu_stepper.get_commanded_position() for s in self.steppers]
@@ -288,7 +288,8 @@ class DeltaKinematics:
 
             # The model returns the z value for the given design parameters using the actuator positions of the current
             # probe positions
-            model = [actuator_to_cartesian(xx, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections)[2] for xx in x]
+            towers = model_tower_positions(self.angles, radius, angle_corrections)
+            model = [actuator_to_cartesian(xx, self.arm_length2, towers, endstop_corrections)[2] for xx in x]
 
             # Return the error i.e. the distance between the toolhead and the bed
             return model
@@ -317,7 +318,8 @@ class DeltaKinematics:
         radius = out.params['radius'].value
 
         # Calculate the estimated std after calibration
-        corr = [model_actuator_to_cartesian(pos, self.angles, self.arm_length2, radius, angle_corrections, endstop_corrections) for pos in actuator_pos]
+        towers = model_tower_positions(self.angles, radius, angle_corrections)
+        corr = [model_actuator_to_cartesian(pos, self.arm_length2, towers, endstop_corrections) for pos in actuator_pos]
         std = numpy.std([p[2] for p in corr])
 
         # Calculate corrected angle and endstop positions
@@ -341,19 +343,15 @@ class DeltaKinematics:
 # Calibration helper functions
 ######################################################################
 
-def model_actuator_to_cartesian(pos, angles, arm_length2, radius, angle_corrections, endstop_corrections):
+def model_actuator_to_cartesian(pos, arm_length2, towers, endstop_corrections):
     """
     Used to model a Delta printer using the parameters below.
     :param pos: The position in actuator coords
-    :param angles: The tower angles
     :param arm_length2: The arm length squared
-    :param radius: The delta radius
-    :param angle_corrections: The tower angle corrections
+    :param towers: The tower positions in XY plane
     :param endstop_corrections: The endstop corrections
     :return: The cartesian coords corresponding to the actuator positions
     """
-
-    towers = model_tower_positions(angles, radius, angle_corrections)
 
     # Based on code from Smoothieware
     tower1 = list(towers[0]) + [pos[0] + endstop_corrections[0]]
